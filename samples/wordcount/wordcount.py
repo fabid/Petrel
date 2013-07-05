@@ -10,7 +10,7 @@ log.debug('wordcount loading')
 
 class WordCountBolt(BasicBolt):
     def __init__(self):
-        super(WordCountBolt, self).__init__(script='wordcount.py')
+        super(WordCountBolt, self).__init__()
         self._count = defaultdict(int)
 
     @classmethod
@@ -44,6 +44,3 @@ def test():
     assert_equal(2, bolt._count['word'])
     assert_equal(1, bolt._count['other'])
     assert_equal([['word', 1], ['other', 1], ['word', 2]], result[bolt])
-
-def run():
-    WordCountBolt().run()

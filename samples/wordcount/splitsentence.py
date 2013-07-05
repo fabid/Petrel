@@ -9,9 +9,10 @@ log.debug('splitsentence loading')
 
 class SplitSentenceBolt(BasicBolt):
     def __init__(self):
-        super(SplitSentenceBolt, self).__init__(script=__file__)
+        super(SplitSentenceBolt, self).__init__()
 
-    def declareOutputFields(self):
+    @classmethod
+    def declareOutputFields(cls):
         return ['word']
 
     def process(self, tup):
@@ -35,6 +36,3 @@ def test():
     
     result = mock.run_simple_topology(None, [mock_spout, bolt], result_type=mock.LIST)
     assert_equal([['Madam,'], ["I'm"], ['Adam.']], result[bolt])
-
-def run():
-    SplitSentenceBolt().run()

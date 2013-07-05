@@ -11,7 +11,7 @@ log.debug('randomsentence loading')
 
 class RandomSentenceSpout(Spout):
     def __init__(self):
-        super(RandomSentenceSpout, self).__init__(script=__file__)
+        super(RandomSentenceSpout, self).__init__()
         #self._index = 0
 
     @classmethod
@@ -52,6 +52,3 @@ class RandomSentenceSpout(Spout):
 #    spout = RandomSentenceSpout()
 #    result = mock.run_simple_topology(None, [spout])
 #    assert_true(isinstance(result[spout][0].sentence, str))
-
-def run():
-    RandomSentenceSpout().run()

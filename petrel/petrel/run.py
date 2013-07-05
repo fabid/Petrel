@@ -3,6 +3,7 @@ import sys
 import socket
 import logging.config
 import traceback
+import json
 
 import storm
 
@@ -69,14 +70,18 @@ class StormHandler(logging.Handler):
 #logging.StormHandler = StormHandler
 
 def main():
-    if len(sys.argv) != 3:
-        print >> sys.stderr, "Usage: %s <module> <log file>" % os.path.splitext(os.path.basename(sys.argv[0]))[0]
+    if len(sys.argv) != 7:
+        print >> sys.stderr, "Usage: %s <module> <log file> <module_name> <class_name> <args> <kwargs>" % os.path.splitext(os.path.basename(sys.argv[0]))[0]
         sys.exit(1)
 
     try:
         global log_file_path, log_initialized, module_name
         os.environ['PETREL_LOG_PATH'] = log_file_path = os.path.abspath(sys.argv[2])
         os.environ['SCRIPT'] = module_name = sys.argv[1]
+        module_name = sys.argv[3]
+        class_name = sys.argv[4]
+        class_args = json.loads(sys.argv[5]) or []
+        class_kwargs = json.loads(sys.argv[6]) or {}
         sys.excepthook = handle_exception
     
         with open_log() as f:
@@ -96,8 +101,9 @@ def main():
         storm.initialize_profiling()
         
         sys.path[:0] = [ os.getcwd() ]
-        module = __import__(module_name)
-        getattr(module, 'run')()
+        module = __import__(module_name, globals(), locals(), [''])
+        getattr(module, class_name)(*class_args, **class_kwargs).run()
+
         with open_log() as f:
             print >> f, 'Worker %s exiting normally.' % module_name
     except:

@@ -5,3 +5,4 @@ logconfig.ini
 
 # Topology-specific files
 #../../pyepde/dist/epde-*-py2.7.egg
+*.py

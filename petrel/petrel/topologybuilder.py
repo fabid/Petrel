@@ -29,11 +29,13 @@ class TopologyBuilder(object):
     # * @param id the id of this component. This id is referenced by other components that want to consume this bolt's outputs.
     # * @param bolt the bolt
     # * @param parallelism_hint the number of tasks that should be assigned to execute this bolt. Each task will run on a thread in a process somewhere around the cluster.
+    # * @param args args to initialize the bolt class
+    # * @param kwargs kwargs to initialize the bolt class
     # * @return use the returned object to declare the inputs to this component
     # */
-    def setBolt(self, id, bolt, parallelism_hint=None):
+    def setBolt(self, id, bolt, parallelism_hint=None, args=None, kwargs=None):
         self._validateUnusedId(id);
-        self._initCommon(id, bolt, parallelism_hint);
+        self._initCommon(id, bolt, parallelism_hint, args, kwargs);
         self._bolts[id] = bolt
 
         return _BoltGetter(self, id)
@@ -43,10 +45,12 @@ class TopologyBuilder(object):
     # *
     # * @param id the id of this component. This id is referenced by other components that want to consume this spout's outputs.
     # * @param spout the spout
+    # * @param args args to initialize the spout class
+    # * @param kwargs kwargs to initialize the spout class
     # */
-    def setSpout(self, id, spout, parallelism_hint=None):
+    def setSpout(self, id, spout, parallelism_hint=None, args=None, kwargs=None):
         self._validateUnusedId(id);
-        self._initCommon(id, spout, parallelism_hint);
+        self._initCommon(id, spout, parallelism_hint, args, kwargs);
         self._spouts[id] = spout
 
     def addOutputStream(self, id, streamId, output_fields, direct=False):
@@ -130,14 +134,17 @@ class TopologyBuilder(object):
         
         return common
 
-    def _initCommon(self, id, component, parallelism):
+    def _initCommon(self, id, component, parallelism, args, kwargs):
         common = ComponentCommon()
         
         common.inputs = {}
         common.streams = {}
         if parallelism is not None:
             common.parallelism_hint = parallelism
-        conf = component.getComponentConfiguration()
+        common.args = args
+        common.kwargs = kwargs
+        #conf = component.getComponentConfiguration()
+        conf = None
         if conf is not None:
             common.json_conf = json.dumps(conf)
         self._commons[id] = common
