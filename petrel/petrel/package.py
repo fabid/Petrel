@@ -16,6 +16,7 @@ from topologybuilder import TopologyBuilder
 from util import read_yaml
 
 MANIFEST = 'manifest.txt'
+MANIFEST_YAML = 'manifest.yaml'
 
 def add_to_jar(jar, name, data):
     path = 'resources/%s' % name
@@ -24,10 +25,11 @@ def add_to_jar(jar, name, data):
 
 def add_file_to_jar(jar, directory, script=None, required=True):
     if script is not None:
+        directory = directory.rstrip('/')
         path = os.path.join(directory, script)
     else:
         path = directory
-    
+
     # Use glob() to allow for wildcards, e.g. in manifest.txt.
     path_list = glob.glob(path)
 
@@ -37,19 +39,11 @@ def add_file_to_jar(jar, directory, script=None, required=True):
     #    raise ValueError("Wildcard '%s' matches multiple files: %s" % (path, ', '.join(path_list)))
     for this_path in path_list:
         with open(this_path, 'r') as f:
-            # allow adding py files and directories, containing py files
-            path_ext = os.path.splitext(this_path)[-1]
-            if path_ext == '.py':
-                if os.path.isabs(this_path):
-                    # py files with absolute path are considered to be modules for 
-                    # the petrel.emitters and are added to the resources root
-                    jar_path = this_path[len(directory) + 1:]
-                else:
-                    # py files with relative path are considered to be defined in
-                    # manifest.txt are added respecting the python package structure
-                    jar_path = this_path
+            # if directory and script are given, drop the directory part
+            # otherwise, drop the whole path up to the basename
+            if script is not None:
+                jar_path = this_path[len(directory) + 1:]
             else:
-                # drop the path when not .py file
                 jar_path = os.path.basename(this_path)
             add_to_jar(jar, jar_path, f.read())
 
@@ -83,15 +77,30 @@ def build_jar(source_jar_path, dest_jar_path, config, venv=None, definition=None
     jar = zipfile.ZipFile(dest_jar_path, 'a', compression=zipfile.ZIP_DEFLATED)
     
     added_path_entry = False
+    original_path = list(sys.path)
     try:
-        # Add the files listed in manifest.txt to the jar.
-        with open(os.path.join(topology_dir, MANIFEST), 'r') as f:
-            for fn in f.readlines():
-                # Ignore blank and comment lines.
-                fn = fn.strip()
-                if len(fn) and not fn.startswith('#'):
+        # The manifest is manifest.yaml if it can be read, otherwise manifest.txt
+        try:
+            manifest_yaml = read_yaml(os.path.join(topology_dir, MANIFEST_YAML))
+        except:
+            manifest_yaml = None
 
-                    add_file_to_jar(jar, os.path.expandvars(fn.strip()))
+        # Add the files listed in the manifest to the jar.
+        if manifest_yaml is not None:
+            for dic in manifest_yaml:
+                if dic['dir']:
+                    directory = os.path.expandvars(dic['dir'].strip())
+                else:
+                    directory = topology_dir
+                for script in dic['files']:
+                    add_file_to_jar(jar, directory, os.path.expandvars(script.strip()))
+        else:
+            with open(os.path.join(topology_dir, MANIFEST), 'r') as f:
+                for fn in f.readlines():
+                    # Ignore blank and comment lines.
+                    fn = fn.strip()
+                    if len(fn) and not fn.startswith('#'):
+                        add_file_to_jar(jar, os.path.expandvars(fn.strip()))
 
         # Add user and machine information to the jar.
         add_to_jar(jar, '__submitter__.yaml', '''
@@ -103,13 +112,32 @@ petrel.host: %s
         with open(config, 'r') as f:
             config_text = f.read()
         add_to_jar(jar, '__topology__.yaml', config_text)
-    
-        # Call module_name/function_name to populate a Thrift topology object.
-        builder = TopologyBuilder()
+
+        # Add the directory of the topology to sys.path
         module_dir = os.path.abspath(topology_dir)
         if module_dir not in sys.path:
+            print 'Adding %s to $PATH' % module_dir
             sys.path[:0] = [ module_dir ]
             added_path_entry = True
+        # If manifest is a YAML file, add the sys.path all directories
+        # from which .py files have been added to the jar
+        if manifest_yaml:
+            for dic in manifest_yaml:
+                if dic['dir']:
+                    directory = os.path.expandvars(dic['dir'].strip())
+                else:
+                    continue
+                for script in dic['files']:
+                    paths = glob.glob(os.path.join(directory, os.path.expandvars(script.strip())))
+                    if any([os.path.splitext(p)[1] == '.py' for p in paths]):
+                        module_dir = os.path.abspath(directory)
+                        if module_dir not in sys.path:
+                            print 'Adding %s to $PATH' % module_dir
+                            sys.path[:0] = [ module_dir ]
+                            added_path_entry = True
+
+        # Call module_name/function_name to populate a Thrift topology object.
+        builder = TopologyBuilder()
         module = __import__(module_name)
         getattr(module, function_name)(builder)
 
@@ -158,7 +186,7 @@ petrel.host: %s
         jar.close()
         if added_path_entry:
             # Undo our sys.path change.
-            sys.path[:] = sys.path[1:]
+            sys.path = original_path
 
 def intercept(venv, execution_command, script, jar, pip_options, logdir, module_name, class_name, args=None, kwargs=None):
     #create_virtualenv = 1 if execution_command == EmitterBase.DEFAULT_PYTHON else 0
